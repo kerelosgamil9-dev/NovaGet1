@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="nova_navy">#020C2C</color>
+    <style name="NovaTheme" parent="@android:style/Theme.NoTitleBar">
+        <item name="android:windowBackground">@color/nova_navy</item>
+    </style>
+</resources>
