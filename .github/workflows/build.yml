@@ -1,0 +1,73 @@
+name: Build NovaGet APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check files
+        shell: bash
+        run: |
+          for f in main.py icon.png icon_fg.png icon_bg.png presplash.png nova_theme.xml nova_theme_v31.xml extra_app_args.txt; do
+            [ -f "$f" ] || { echo "::error::الملف $f ناقص في الريبو"; exit 1; }
+          done
+          [ -f assets/logo.png ] || echo "::warning::assets/logo.png مش موجود: التطبيق هيستخدم لوجو بديل"
+
+      - name: Prepare ffmpeg (optional)
+        shell: bash
+        run: |
+          mkdir -p libs/arm64-v8a
+          for f in libffmpeg.so ffmpeg_bin ffmpeg; do
+            if [ -f "$f" ]; then
+              cp "$f" libs/arm64-v8a/libffmpeg.so
+              echo "ffmpeg: using $f"
+              break
+            fi
+          done
+          [ -f libs/arm64-v8a/libffmpeg.so ] || echo "::warning::مفيش ffmpeg"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache buildozer
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.buildozer
+            .buildozer
+          key: buildozer-${{ hashFiles('buildozer.spec') }}
+          restore-keys: buildozer-
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+      - name: Install buildozer
+        run: pip install --upgrade buildozer cython==0.29.36 virtualenv
+      - name: Build
+        shell: bash
+        run: |
+          set -o pipefail
+          buildozer -v android debug 2>&1 | tee build.log
+      - name: Show the real error
+        if: failure()
+        shell: bash
+        run: |
+          grep -n -i -E "error:|fatal|Traceback|No such file|not found|failed|Exception|Killed|No space" build.log | grep -v -i "Wno-\|Werror=\|deprecated" | tail -40
+          tail -60 build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: NovaGet-apk
+          path: |
+            bin/*.apk
+            build.log
